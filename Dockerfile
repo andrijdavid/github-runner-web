@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.11-slim-bookworm
 
 ARG RUNNER_VERSION=2.335.1
 ARG TARGETARCH
