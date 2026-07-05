@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GitHub Runner on Umbrel</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-2: #21262d;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --muted: #8b949e;
+      --accent: #2f81f7;
+      --accent-hover: #388bfd;
+      --danger: #f85149;
+      --success: #3fb950;
+      --warning: #d29922;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem 1rem;
+    }
+    h1 { margin-top: 0; font-size: 1.75rem; }
+    h2 { font-size: 1.25rem; margin-top: 2rem; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .instructions {
+      background: var(--surface-2);
+      border-left: 4px solid var(--accent);
+      padding: 1rem;
+      border-radius: 0 6px 6px 0;
+      margin-bottom: 1.5rem;
+    }
+    .instructions ol { margin: 0.5rem 0 0 1.25rem; padding: 0; }
+    .instructions li { margin-bottom: 0.5rem; }
+    label {
+      display: block;
+      margin: 1rem 0 0.35rem;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    input[type="text"], input[type="url"], input[type="password"], select {
+      width: 100%;
+      padding: 0.6rem 0.75rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+    input:focus, select:focus { outline: none; border-color: var(--accent); }
+    .hint { color: var(--muted); font-size: 0.85rem; margin-top: 0.25rem; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 600px) { .row { grid-template-columns: 1fr; } }
+    .actions { display: flex; gap: 0.75rem; margin-top: 1.5rem; flex-wrap: wrap; }
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 0.65rem 1.25rem;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button:hover { background: var(--accent-hover); }
+    button.secondary { background: var(--surface-2); border: 1px solid var(--border); }
+    button.secondary:hover { background: var(--border); }
+    button.danger { background: var(--danger); }
+    button.danger:hover { background: #ff6b64; }
+    .status-pill {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      background: var(--surface-2);
+    }
+    .status-pill.running { background: rgba(63, 185, 80, 0.15); color: var(--success); }
+    .status-pill.error { background: rgba(248, 81, 73, 0.15); color: var(--danger); }
+    .status-pill.configuring { background: rgba(210, 153, 34, 0.15); color: var(--warning); }
+    .status-pill.not_configured { background: var(--surface-2); color: var(--muted); }
+    .log-viewer {
+      background: #010409;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      height: 420px;
+      overflow-y: auto;
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.85rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .message {
+      padding: 1rem;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+      display: none;
+    }
+    .message.visible { display: block; }
+    .message.success { background: rgba(63, 185, 80, 0.1); border: 1px solid rgba(63, 185, 80, 0.3); }
+    .message.error { background: rgba(248, 81, 73, 0.1); border: 1px solid rgba(248, 81, 73, 0.3); }
+    .checkbox { display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem; }
+    .checkbox input { width: auto; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>GitHub Actions Runner</h1>
+    <p style="color: var(--muted);">Run a self-hosted GitHub Actions runner directly on your Umbrel.</p>
+
+    <div id="message" class="message"></div>
+
+    {% if not configured %}
+    <div class="card">
+      <div class="instructions">
+        <strong>How to connect this runner to a repository</strong>
+        <ol>
+          <li>Open your repository on GitHub and go to <strong>Settings &rarr; Actions &rarr; Runners</strong>.</li>
+          <li>Click <strong>New self-hosted runner</strong>, choose <strong>Linux</strong>, and copy the <strong>token</strong> shown in the configure command.</li>
+          <li>Paste the repository URL and token below, choose a name and labels, then click <strong>Attach runner</strong>.</li>
+        </ol>
+        <p class="hint">You can also use an organization URL (for example <code>https://github.com/myorg</code>) to register an organization runner.</p>
+      </div>
+
+      <h2>Runner configuration</h2>
+      <form id="config-form">
+        <label for="runner_name">Runner name</label>
+        <input type="text" id="runner_name" name="runner_name" value="{{ config.get('runner_name', 'umbrel-github-runner') }}" required>
+
+        <label for="url">GitHub repository or organisation URL</label>
+        <input type="url" id="url" name="url" placeholder="https://github.com/owner/repo" value="{{ config.get('url', '') }}" required>
+
+        <label for="token">Registration token</label>
+        <input type="password" id="token" name="token" placeholder="Paste the token from GitHub" required>
+        <div class="hint">This token is short-lived. Keep this page private.</div>
+
+        <div class="row">
+          <div>
+            <label for="runner_group">Runner group</label>
+            <input type="text" id="runner_group" name="runner_group" value="{{ config.get('runner_group', 'default') }}">
+          </div>
+          <div>
+            <label for="labels">Labels</label>
+            <input type="text" id="labels" name="labels" value="{{ config.get('labels', 'self-hosted,Linux,X64,umbrel') }}">
+          </div>
+        </div>
+
+        <div class="checkbox">
+          <input type="checkbox" id="ephemeral" name="ephemeral" {% if config.get('ephemeral') %}checked{% endif %}>
+          <label for="ephemeral" style="margin: 0;">Ephemeral runner (deregister after one job)</label>
+        </div>
+
+        <div class="checkbox">
+          <input type="checkbox" id="no_default_labels" name="no_default_labels" {% if config.get('no_default_labels') %}checked{% endif %}>
+          <label for="no_default_labels" style="margin: 0;">Disable default labels (self-hosted, Linux, architecture)</label>
+        </div>
+
+        <div class="actions">
+          <button type="submit">Attach runner</button>
+        </div>
+      </form>
+    </div>
+    {% else %}
+    <div class="card">
+      <h2>Runner status</h2>
+      <p>
+        <span id="status-pill" class="status-pill {{ status.get('state', 'not_configured') }}">{{ status.get('state', 'not configured') }}</span>
+      </p>
+      <p id="status-message">{{ status.get('message', '') }}</p>
+      <dl>
+        <dt style="color: var(--muted); margin-top: 0.75rem;">Name</dt>
+        <dd style="margin-left: 0;">{{ config.get('runner_name', '') }}</dd>
+        <dt style="color: var(--muted); margin-top: 0.75rem;">URL</dt>
+        <dd style="margin-left: 0;">{{ config.get('url', '') }}</dd>
+        <dt style="color: var(--muted); margin-top: 0.75rem;">Labels</dt>
+        <dd style="margin-left: 0;">{{ config.get('labels', '') }}</dd>
+      </dl>
+      <div class="actions">
+        <button type="button" class="secondary" onclick="showConfig()">Edit configuration</button>
+        <button type="button" class="danger" onclick="resetConfig()">Reset / detach</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Runner logs</h2>
+      <div class="actions">
+        <button type="button" class="secondary" onclick="loadLogs()">Refresh</button>
+        <button type="button" class="secondary" onclick="toggleStreaming()" id="stream-btn">Start live stream</button>
+      </div>
+      <div id="logs" class="log-viewer" style="margin-top: 1rem;">Loading...</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <script>
+    const messageEl = document.getElementById('message');
+    function showMessage(text, type) {
+      messageEl.textContent = text;
+      messageEl.className = 'message visible ' + type;
+      setTimeout(() => { messageEl.className = 'message'; }, 6000);
+    }
+
+    {% if not configured %}
+    document.getElementById('config-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const data = {
+        runner_name: document.getElementById('runner_name').value,
+        url: document.getElementById('url').value,
+        token: document.getElementById('token').value,
+        runner_group: document.getElementById('runner_group').value,
+        labels: document.getElementById('labels').value,
+        ephemeral: document.getElementById('ephemeral').checked,
+        no_default_labels: document.getElementById('no_default_labels').checked,
+      };
+      try {
+        const res = await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+        const body = await res.json();
+        if (res.ok && body.ok) {
+          showMessage('Configuration saved. The runner is being registered.', 'success');
+          setTimeout(() => location.reload(), 1000);
+        } else {
+          showMessage('Failed to save configuration.', 'error');
+        }
+      } catch (err) {
+        showMessage('Network error: ' + err.message, 'error');
+      }
+    });
+    {% else %}
+    const logsEl = document.getElementById('logs');
+    let eventSource = null;
+
+    async function loadLogs() {
+      try {
+        const res = await fetch('/api/logs');
+        const text = await res.text();
+        logsEl.textContent = text || '(no logs yet)';
+        logsEl.scrollTop = logsEl.scrollHeight;
+      } catch (err) {
+        logsEl.textContent = 'Error loading logs: ' + err.message;
+      }
+    }
+
+    function toggleStreaming() {
+      const btn = document.getElementById('stream-btn');
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+        btn.textContent = 'Start live stream';
+      } else {
+        btn.textContent = 'Stop live stream';
+        eventSource = new EventSource('/api/logs/stream');
+        eventSource.onmessage = (ev) => {
+          const data = JSON.parse(ev.data);
+          logsEl.textContent += data.line + '\n';
+          logsEl.scrollTop = logsEl.scrollHeight;
+        };
+        eventSource.onerror = () => {
+          eventSource.close();
+          eventSource = null;
+          btn.textContent = 'Start live stream';
+        };
+      }
+    }
+
+    async function updateStatus() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        const state = data.status && data.status.state || 'not_configured';
+        const pill = document.getElementById('status-pill');
+        pill.className = 'status-pill ' + state;
+        pill.textContent = state.replace('_', ' ');
+        document.getElementById('status-message').textContent = (data.status && data.status.message) || '';
+      } catch (err) {
+        console.error('Status update failed', err);
+      }
+    }
+
+    function showConfig() {
+      if (confirm('Editing the configuration will detach and re-register the runner. Continue?')) {
+        location.href = '/';
+      }
+    }
+
+    async function resetConfig() {
+      if (!confirm('This will detach the runner from GitHub and clear local configuration. Continue?')) return;
+      try {
+        const res = await fetch('/api/config', { method: 'DELETE' });
+        if (res.ok) {
+          location.reload();
+        } else {
+          showMessage('Failed to reset configuration.', 'error');
+        }
+      } catch (err) {
+        showMessage('Network error: ' + err.message, 'error');
+      }
+    }
+
+    loadLogs();
+    setInterval(updateStatus, 5000);
+    {% endif %}
+  </script>
+</body>
+</html>
