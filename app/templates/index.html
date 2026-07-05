@@ -234,7 +234,7 @@
 
       <div id="message" class="message"></div>
 
-      {% if not configured %}
+      {% if not configured or editing %}
       <section class="card">
         <div class="instructions">
           <strong>How to connect this runner</strong>
@@ -246,7 +246,7 @@
           <p class="hint">You can also use an organisation URL (for example <code>https://github.com/myorg</code>) to register an organisation runner.</p>
         </div>
 
-        <h2>Runner configuration</h2>
+        <h2>{% if editing %}Edit runner configuration{% else %}Runner configuration{% endif %}</h2>
         <form id="config-form">
           <label for="runner_name">Runner name</label>
           <input type="text" id="runner_name" name="runner_name" value="{{ config.get('runner_name', 'github-runner') }}" required>
@@ -255,7 +255,7 @@
           <input type="url" id="url" name="url" placeholder="https://github.com/owner/repo" value="{{ config.get('url', '') }}" required>
 
           <label for="token">Registration token</label>
-          <input type="password" id="token" name="token" placeholder="Paste the token from GitHub" required>
+          <input type="password" id="token" name="token" placeholder="Paste the token from GitHub" {% if not editing %}required{% endif %}>
           <div class="hint">This token is short-lived. Keep this page private.</div>
 
           <div class="row">
@@ -280,7 +280,8 @@
           </div>
 
           <div class="actions">
-            <button type="submit">Attach runner</button>
+            <button type="submit">{% if editing %}Save and re-register{% else %}Attach runner{% endif %}</button>
+            {% if editing %}<a href="/" class="button secondary">Cancel</a>{% endif %}
           </div>
         </form>
       </section>
@@ -409,7 +410,7 @@
 
     function editConfig() {
       if (confirm('Editing the configuration will detach and re-register the runner. Continue?')) {
-        location.href = '/';
+        location.href = '/?edit=1';
       }
     }
 

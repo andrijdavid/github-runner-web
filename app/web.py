@@ -15,7 +15,7 @@ from app.common import CONFIG_PATH, RUNNER_LOG_PATH, STATUS_PATH, ensure_dirs, r
 class RunnerConfig(BaseModel):
     runner_name: str = Field(default="github-runner", min_length=1)
     url: str = Field(default="", min_length=1)
-    token: str = Field(default="", min_length=1)
+    token: str = Field(default="")
     runner_group: str = Field(default="default")
     labels: str = Field(default="")
     ephemeral: bool = Field(default=False)
@@ -42,12 +42,14 @@ templates = Jinja2Templates(directory="/app/app/templates")
 async def index(request: Request):
     config = read_json(CONFIG_PATH)
     status = read_json(STATUS_PATH)
-    configured = bool(config.get("url") and config.get("token"))
+    editing = request.query_params.get("edit") == "1"
+    configured = bool(config.get("url") and config.get("token")) and not editing
     return templates.TemplateResponse(
         "index.html",
         {
             "request": request,
             "configured": configured,
+            "editing": editing,
             "config": config,
             "status": status,
             "default_labels": default_labels(),
@@ -62,10 +64,16 @@ async def api_status():
 
 @app.post("/api/config")
 async def api_config(payload: RunnerConfig):
+    existing = read_json(CONFIG_PATH)
+    token = payload.token.strip()
+    if not token:
+        token = existing.get("token", "")
+    if not token:
+        return {"ok": False, "error": "A registration token is required."}
     config = {
         "runner_name": payload.runner_name.strip(),
         "url": payload.url.strip().rstrip("/"),
-        "token": payload.token.strip(),
+        "token": token,
         "runner_group": payload.runner_group.strip() or "default",
         "labels": payload.labels.strip() or default_labels(),
         "ephemeral": payload.ephemeral,
