@@ -6,7 +6,9 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 from app.common import (
@@ -27,6 +29,17 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger("runner-manager")
+
+
+def timestamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+
+def write_log_line(log_f, text: str):
+    """Write a single line to the runner log with a UTC timestamp prefix."""
+    for line in text.splitlines():
+        log_f.write(f"[{timestamp()}] {line}\n")
+        log_f.flush()
 
 
 def runner_installed():
@@ -79,8 +92,7 @@ def run_command(cmd, cwd, env=None, timeout=None):
     logger.info("Running: %s", " ".join(cmd))
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     with open(RUNNER_LOG_PATH, "a", encoding="utf-8") as log_f:
-        log_f.write(f"\n### {' '.join(cmd)}\n")
-        log_f.flush()
+        write_log_line(log_f, f"### {' '.join(cmd)}")
         process = subprocess.Popen(
             cmd,
             cwd=cwd,
@@ -94,8 +106,7 @@ def run_command(cmd, cwd, env=None, timeout=None):
             for line in process.stdout:
                 line = line.rstrip()
                 stdout_lines.append(line)
-                log_f.write(line + "\n")
-                log_f.flush()
+                write_log_line(log_f, line)
         except Exception as exc:
             logger.exception("Error reading command output: %s", exc)
         process.wait(timeout=timeout)
@@ -150,6 +161,16 @@ class RunnerManager:
         )
         return returncode == 0, stdout
 
+    def _stream_runner_logs(self, process: subprocess.Popen):
+        """Background thread that timestamps and writes runner stdout to the log file."""
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        with open(RUNNER_LOG_PATH, "a", encoding="utf-8") as log_f:
+            try:
+                for line in process.stdout:
+                    write_log_line(log_f, line.rstrip())
+            except Exception as exc:
+                logger.exception("Error reading runner output: %s", exc)
+
     def start_runner(self):
         """Start the runner process."""
         if self.process is not None and self.process.poll() is None:
@@ -157,18 +178,19 @@ class RunnerManager:
         logger.info("Starting GitHub Actions runner")
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         with open(RUNNER_LOG_PATH, "a", encoding="utf-8") as log_f:
-            log_f.write("\n### Starting runner\n")
-            log_f.flush()
+            write_log_line(log_f, "### Starting runner")
             env = os.environ.copy()
             env["RUNNER_ALLOW_RUNASROOT"] = "1" if os.geteuid() == 0 else "0"
             self.process = subprocess.Popen(
                 ["./run.sh"],
                 cwd=RUNNER_DIR,
                 env=env,
-                stdout=log_f,
+                stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
             )
+        thread = threading.Thread(target=self._stream_runner_logs, args=(self.process,), daemon=True)
+        thread.start()
 
     def stop_runner(self):
         """Stop the runner process gracefully."""
