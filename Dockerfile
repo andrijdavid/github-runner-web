@@ -33,6 +33,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . /app
+RUN chmod +x /app/entrypoint.sh
 
 # Run as a non-root user. Umbrel mounts app data as 1000:1000.
 RUN groupadd -g 1000 runner && useradd -u 1000 -g runner -m runner \
@@ -42,4 +43,4 @@ USER runner:runner
 
 EXPOSE 8080
 
-CMD ["supervisord", "-c", "/app/supervisord.conf"]
+ENTRYPOINT ["/app/entrypoint.sh"]
