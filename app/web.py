@@ -99,10 +99,12 @@ def api_logs_stream():
                         chunk = f.read(current_size - last_size)
                     last_size = current_size
                     for line in chunk.splitlines(keepends=True):
-                        yield f"data: {json.dumps({'line': line.rstrip('\\n')})}\\n\\n"
+                        payload = json.dumps({"line": line.rstrip("\n")})
+                        yield f"data: {payload}\n\n"
                 time.sleep(1)
             except Exception as exc:
-                yield f"data: {json.dumps({'line': f'Log stream error: {exc}'})}\\n\\n"
+                payload = json.dumps({"line": f"Log stream error: {exc}"})
+                yield f"data: {payload}\n\n"
                 time.sleep(2)
 
     return Response(event_stream(), mimetype="text/event-stream")
